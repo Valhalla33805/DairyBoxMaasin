@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+  <title>Dairy Box & Pinoy Credit Coop GIS</title>
+
+  <link
+    href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
+    rel="stylesheet"
+  />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <style>
+    *{
+      margin:0;
+      padding:0;
+      box-sizing:border-box;
+      font-family:'Poppins',sans-serif;
+    }
+
+    body{
+      overflow:hidden;
+      background:#07131f;
+      color:white;
+    }
+
+    #map{
+      width:100%;
+      height:100vh;
+      transition: all 0.3s ease;
+    }
+
+    /* =========================
+        TOGGLE BUTTON DESIGN
+    ========================= */
+    .minimize-btn {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: white;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      transition: background 0.3s, transform 0.3s;
+      z-index: 25;
+    }
+
+    .minimize-btn:hover {
+      background: rgba(27, 115, 57, 0.4); 
+      transform: scale(1.05);
+    }
+
+    /* COLLAPSIBLE TRANSITIONS */
+    .collapsed {
+      width: 50px !important;
+      height: 50px !important;
+      padding: 0 !important;
+      overflow: hidden;
+      border-radius: 50% !important;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
+    }
+
+    .collapsed *:not(.minimize-btn) {
+      opacity: 0 !important;
+      pointer-events: none;
+      transition: opacity 0.15s ease-out !important;
+    }
+
+    .sidebar *:not(.minimize-btn), 
+    .legend *:not(.minimize-btn), 
+    .coordinates *:not(.minimize-btn) {
+      opacity: 1;
+      transition: opacity 0.35s ease-in-out 0.1s;
+    }
+
+    .collapsed .minimize-btn {
+      position: absolute !important;
+      top: 0 !important;
+      right: 0 !important;
+      left: 0 !important;
+      bottom: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      background: transparent !important;
+      border: none !important;
+      border-radius: 50% !important;
+      font-size: 20px;
+    }
+
+    /* =========================
+        TOP HEADER BAR
+    ========================= */
+    .top-bar{
+      position:absolute;
+      top:20px;
+      left:50%;
+      transform:translateX(-50%);
+      z-index:20;
+      background:rgba(7,15,25,0.78);
+      backdrop-filter:blur(18px);
+      border-radius:28px;
+      padding:18px 38px;
+      border:1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      text-align:center;
+      width: max-content;
+    }
+
+    .top-bar h1{
+      font-size:30px;
+      font-weight:700;
+      background:linear-gradient(90deg, #7ef9ff, #4de2ff, #7cffcb);
+      -webkit-background-clip:text;
+      -webkit-text-fill-color:transparent;
+    }
+
+    .top-bar p{
+      margin-top:5px;
+      font-size:13px;
+      opacity:0.82;
+      letter-spacing:1px;
+    }
+
+    /* =========================
+        SIDEBAR INFORMATION
+    ========================= */
+    .sidebar{
+      position:absolute;
+      top:130px;
+      left:20px;
+      width:320px;
+      z-index:20;
+      background:rgba(7,15,25,0.78);
+      backdrop-filter:blur(18px);
+      border-radius:28px;
+      padding:24px;
+      border:1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.15), 
+                  height 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.15), 
+                  padding 0.4s ease;
+    }
+
+    .sidebar h2{
+      color:#7ef9ff;
+      margin-bottom:18px;
+      font-size:24px;
+    }
+
+    .card{
+      background:linear-gradient(145deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+      border-radius:20px;
+      padding:16px;
+      margin-bottom:15px;
+      transition: 0.3s ease;
+      border:1px solid rgba(255,255,255,0.06);
+    }
+
+    .card:hover{
+      transform:translateY(-3px);
+      background:rgba(255,255,255,0.08);
+    }
+
+    .card h3 { font-size:1rem; margin-bottom:4px; color:#7cffcb; }
+    .card p { font-size:0.85rem; opacity:0.85; line-height:1.4; }
+
+    /* =========================
+        STREET ACTION OVERLAY PANEL
+    ========================= */
+    #street-view{
+      position:absolute;
+      top:130px;
+      right:20px;
+      width:480px;
+      height:310px;
+      z-index:30;
+      border-radius:28px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 15px 45px rgba(0,0,0,0.5);
+      background:#000;
+      display: none;
+      transition: all 0.35s ease;
+    }
+
+    #street-view.fullscreen {
+      width: 100% !important;
+      height: 100vh !important;
+      top: 0 !important;
+      right: 0 !important;
+      border-radius: 0px !important;
+      z-index: 40;
+    }
+
+    #street-image {
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      opacity: 1;
+      transition: opacity 0.25s ease-in-out;
+    }
+
+    #street-image.fade-out { opacity: 0; }
+
+    .sv-header {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 32;
+    }
+
+    #close-street-view {
+      background: rgba(255, 60, 60, 0.8);
+      border: none;
+      color: white;
+      width: 35px;
+      height: 35px;
+      border-radius: 50%;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: 0.3s;
+    }
+
+    #close-street-view:hover { background: #ff4d6d; transform: scale(1.1); }
+
+    #fullscreen-street-view {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: white;
+      width: 35px;
+      height: 35px;
+      border-radius: 50%;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: 0.3s;
+    }
+
+    #fullscreen-street-view:hover { background: #00d9ff; color: #081421; transform: scale(1.1); }
+
+    .sv-nav-controls {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      display: flex;
+      gap: 12px;
+      z-index: 32;
+    }
+
+    .sv-nav-btn {
+      background: rgba(0,0,0,0.65);
+      border: none;
+      color: white;
+      padding: 10px 18px;
+      border-radius: 12px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: 0.3s;
+      backdrop-filter: blur(10px);
+      font-weight: 600;
+    }
+
+    .sv-nav-btn:hover { background: #00d9ff; color: #081421; }
+
+    /* =========================
+        MAP LAYOUT LEGEND
+    ========================= */
+    .legend{
+      position:absolute;
+      bottom:20px;
+      right:20px;
+      width:250px;
+      height: 140px;
+      z-index:20;
+      background:rgba(7,15,25,0.78);
+      backdrop-filter:blur(18px);
+      border-radius:28px;
+      padding:22px;
+      border:1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.15);
+    }
+
+    .legend h3{ color:#7ef9ff; margin-bottom:12px; font-size:18px; }
+    .legend-item{ display:flex; align-items:center; gap:12px; margin-bottom:10px; font-size:14px; }
+    .dot{ width:13px; height:13px; border-radius:50%; box-shadow: 0 0 12px rgba(255,255,255,0.4); }
+
+    /* =========================
+        COORDINATES PANEL
+    ========================= */
+    .coordinates{
+      position:absolute;
+      top:20px;
+      right:55px;
+      width: 195px;
+      height: 78px;
+      z-index:20;
+      background:rgba(7,15,25,0.78);
+      backdrop-filter:blur(18px);
+      border-radius:22px;
+      padding:16px 22px;
+      border:1px solid rgba(255,255,255,0.08);
+      font-size:13px;
+      line-height:1.7;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      transition: all 0.4s ease;
+    }
+
+    .footer-note{
+      position:absolute;
+      left:20px;
+      bottom:20px;
+      z-index:20;
+      background:rgba(255,255,255,0.1);
+      backdrop-filter:blur(10px);
+      padding:12px 20px;
+      border-radius:16px;
+      font-size:12px;
+      border:1px solid rgba(255,255,255,0.06);
+    }
+
+    /* =========================
+        POPUP MAP STYLES
+    ========================= */
+    .maplibregl-popup-content{
+      background:linear-gradient(145deg, #081421, #10253d) !important;
+      color:white !important;
+      border-radius:26px !important;
+      padding:0 !important;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,0.08);
+      width:320px;
+      backdrop-filter:blur(18px);
+    }
+
+    .popup-box{ padding:24px; }
+    
+    .view-pic-btn {
+      display: block;
+      width: 100%;
+      margin-top: 15px;
+      background: #00d9ff;
+      color: #081421;
+      border: none;
+      padding: 12px;
+      border-radius: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .view-pic-btn:hover { background:#7cffcb; transform:translateY(-1px); }
+    
+    @media(max-width:768px){
+      .sidebar{ width:calc(100% - 40px); bottom:120px; top:auto; }
+      #street-view{ width:calc(100% - 40px); height:220px; bottom:360px; top:auto; }
+      .top-bar { width: calc(100% - 40px); padding: 12px; }
+      .top-bar h1 { font-size: 20px; }
+    }
+    /* =========================
+        FLOATING EXIT BUTTON
+    ========================= */
+    .exit-map-btn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 30; /* Keeps it layered safely above the map canvas */
+      background: rgba(7, 15, 25, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #7cffcb;
+      padding: 12px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      transition: all 0.3s ease;
+    }
+
+    .exit-map-btn:hover {
+      background: #ff4d6d;
+      color: white;
+      border-color: rgba(255,255,255,0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(255, 77, 109, 0.3);
+    }
+
+    /* Adjust the informational sidebar slightly down so it doesn't overlap the new Exit Button */
+    .sidebar {
+      top: 90px !important;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="top-bar">
+    <p>Pinoy Credit Cooperative & Dairy Box Outlets • Maasin City</p>
+    
+  </div>
+
+  <div class="sidebar collapsed" id="sidebar-panel">
+    <button class="minimize-btn" onclick="togglePanel('sidebar-panel', 'ⓘ')">ⓘ</button>
+    <h2>Hub Information</h2>
+    <div class="card">
+      <h3>🏢 Pinoy Credit Cooperative</h3>
+      <p>Administrative and financial operations center managing multi-purpose operations.</p>
+    </div>
+    <div class="card">
+      <h3>🍦 Dairy Box Outlet</h3>
+      <p>The primary storefront distribution branch for fresh local dairy products and ice creams.</p>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <div id="street-view">
+    <div class="sv-header">
+      <button id="close-street-view" title="Close">&times;</button>
+      <button id="fullscreen-street-view" title="Toggle Fullscreen">⛶</button>
+    </div>
+    
+    <img id="street-image" src="" alt="Street View">
+    
+    <div class="sv-nav-controls">
+      <button id="backward-btn" class="sv-nav-btn">◀ Backward</button>
+      <button id="forward-btn" class="sv-nav-btn">▶ Forward</button>
+    </div>
+  </div>
+
+  <div class="legend collapsed" id="legend-panel">
+    <button class="minimize-btn" onclick="togglePanel('legend-panel', '☰')">☰</button>
+    <h3>Legend</h3>
+    <div class="legend-item">
+      <div class="dot" style="background:#1b7339;"></div> Dairy Box Store
+    </div>
+    <div class="legend-item">
+      <div class="dot" style="background:#ffd166;"></div> Pinoy Credit Coop
+    </div>
+  </div>
+
+  <div class="footer-note">Dairy Box Web Mapping Engine</div>
+
+  <div class="coordinates collapsed" id="coords-panel">
+    <button class="minimize-btn" onclick="togglePanel('coords-panel', '⚲')">⚲</button>
+    <div id="coords">
+      Latitude: -- <br>
+      Longitude: --
+    </div>
+  </div>
+
+  <script>
+    // =====================================
+    // UI WINDOW EXPANSION SLIDER ENGINE
+    // =====================================
+    function togglePanel(panelId, icon) {
+      const panel = document.getElementById(panelId);
+      const btn = panel.querySelector('.minimize-btn');
+      
+      panel.classList.toggle('collapsed');
+      
+      if (panel.classList.contains('collapsed')) {
+        btn.innerHTML = icon;
+      } else {
+        btn.innerHTML = '−';
+      }
+    }
+
+    // =====================================
+    // MAP CONFIGURATION & BOUNDARY LOCKS
+    // =====================================
+    // Sets strict boundary corners around Maasin City limits [Longitude, Latitude]
+    const maasinBounds = [
+      [124.73000, 10.05000], // Southwest boundary corner
+      [124.95000, 10.24000]  // Northeast boundary corner
+    ];
+
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: {
+        version: 8,
+        sources: {
+          satellite: {
+            type: 'raster',
+            tiles: ['https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+            tileSize: 256,
+            maxzoom: 19
+          }
+        },
+        layers: [{ id: 'satellite-layer', type: 'raster', source: 'satellite' }]
+      },
+      center: [124.85100, 10.14420], // Centered right between your two facilities
+      zoom: 14.2,
+      minZoom: 12.5,                 // Locks scrolling out too far from the city
+      maxZoom: 19,                   // Deep zoom capabilities for close views
+      maxBounds: maasinBounds,       // Enforces strict city boundaries
+      pitch: 35,
+      bearing: 10
+    });
+
+    map.addControl(new maplibregl.NavigationControl());
+
+    // =====================================
+    // PHOTO OVERLAY DRAWER MECHANICAL ENGINE
+    // =====================================
+    const streetViewBox = document.getElementById('street-view');
+    const streetImage = document.getElementById('street-image');
+    const forwardBtn = document.getElementById('forward-btn');
+    const backwardBtn = document.getElementById('backward-btn');
+    const closeBtn = document.getElementById('close-street-view');
+    const fullscreenBtn = document.getElementById('fullscreen-street-view');
+
+    let currentGallery = [];
+    let currentImgIndex = 0;
+
+    function loadPictures(imgArray) {
+        currentGallery = imgArray;
+        currentImgIndex = 0;
+        streetImage.src = currentGallery[0];
+        streetViewBox.style.display = 'block';
+    }
+
+    closeBtn.addEventListener('click', () => {
+        streetViewBox.style.display = 'none';
+        streetViewBox.classList.remove('fullscreen');
+        fullscreenBtn.innerHTML = '⛶';
+    });
+
+    fullscreenBtn.addEventListener('click', () => {
+        streetViewBox.classList.toggle('fullscreen');
+        if(streetViewBox.classList.contains('fullscreen')) {
+            fullscreenBtn.innerHTML = '🗗';
+        } else {
+            fullscreenBtn.innerHTML = '⛶';
+        }
+    });
+
+    function updateImageSmoothly(newIndex) {
+      if(currentGallery.length === 0) return;
+      
+      streetImage.classList.add('fade-out');
+      
+      setTimeout(() => {
+        currentImgIndex = newIndex;
+        streetImage.src = currentGallery[currentImgIndex];
+        streetImage.classList.remove('fade-out');
+      }, 250); 
+    }
+
+    forwardBtn.addEventListener('click', () => {
+      const nextIndex = (currentImgIndex + 1) % currentGallery.length;
+      updateImageSmoothly(nextIndex);
+    });
+
+    backwardBtn.addEventListener('click', () => {
+      const prevIndex = (currentImgIndex - 1 + currentGallery.length) % currentGallery.length;
+      updateImageSmoothly(prevIndex);
+    });
+
+    // =====================================
+    // POPUP CONTENT HTML GENERATOR BLOCK
+    // =====================================
+    function createPopup(title, color, desc, lat, lng, imgArray){
+      const arrayString = JSON.stringify(imgArray).replace(/"/g, '&quot;');
+      return `
+        <div class="popup-box">
+          <div style="font-size:20px; font-weight:700; color:${color}; margin-bottom:6px;">${title}</div>
+          <div style="font-size:13px; opacity:0.9; margin-bottom:14px; line-height:1.4;">${desc}</div>
+          <div style="background:rgba(255,255,255,0.05); border-radius:10px; padding:10px; font-size:12px; font-family:monospace;">
+            <strong>Lat:</strong> ${lat}<br><strong>Lng:</strong> ${lng}
+          </div>
+          <button class="view-pic-btn" onclick="loadPictures(${arrayString})">
+              📸 View Street Photos (${imgArray.length})
+          </button>
+        </div>
+      `;
+    }
+
+    // =====================================
+    // GEOLOCATION POSITION MARKERS INFUSION
+    // =====================================
+    
+    // Marker 1: Pinoy Credit Cooperative Office
+    new maplibregl.Marker({ color:'#ffd166' }).setLngLat([124.84304, 10.13277])
+    .setPopup(new maplibregl.Popup().setHTML(createPopup(
+      'Pinoy Credit Cooperative', 
+      '#ffd166', 
+      'Main Administrative and Credit Operations Center Headquarters.', 
+      '10.13277', 
+      '124.84304', 
+      ['Pinoy1.png', 'Pinoy2.png'] 
+    )))
+    .addTo(map);
+
+    // Marker 2: Dairy Box Outlet Store
+    new maplibregl.Marker({ color:'#1b7339' }).setLngLat([124.85653, 10.15639])
+    .setPopup(new maplibregl.Popup().setHTML(createPopup(
+      'Dairy Box Store', 
+      '#7cffcb', 
+      'Fresh Carabao milk processing hub and retail outlet storefront.', 
+      '10.15639', 
+      '124.85653', 
+      ['DairyBox1.jpg', 'DairyBox2.jpg'] 
+    )))
+    .addTo(map);
+
+    // =====================================
+    // ON-HOVER MOUSE COORDINATES EVENT TRACKER
+    // =====================================
+    map.on('mousemove', (e) => {
+      document.getElementById('coords').innerHTML = `
+        Latitude: ${e.lngLat.lat.toFixed(5)} <br> Longitude: ${e.lngLat.lng.toFixed(5)}
+      `;
+    });
+  </script>
+</body>
+<a href="index.html" class="exit-map-btn" title="Return to Storefront">
+  🚪 Exit Map
+</a>
+</html>
